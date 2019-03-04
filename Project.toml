@@ -1,0 +1,12 @@
+name = "KubeMeta"
+uuid = "ce6b5d7c-3e0e-11e9-30f4-178342ed9ee0"
+authors = ["pbarker <patrickbarkerco@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+Kuber = "87e52247-8a1b-5e01-9430-8fbcac83a23a"
+MbedTLS = "739be429-bea8-5141-9913-cc70e7f3736d"
+Swagger = "2d69052b-6a58-5cd9-a030-a48559c324ac"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
