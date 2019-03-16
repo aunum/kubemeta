@@ -1,15 +1,39 @@
 import Kuber, MbedTLS, Base, Swagger, YAML, Base64
 
 """
-    discover_client()
+    K8sClient(uri::String, sslconfig::MbedTLS.SSLConfig, headers::Dict{String, String})
 
-Creates a kubercontext based on whether it detects running in a pod or locally
+Holds the configurations for making HTTP k8s connections.
 """
-function discover_client()::Kuber.KuberContext
+mutable struct K8sClient
+    server::String
+    sslconfig::MbedTLS.SSLConfig
+    headers::Dict{String, String}
+    function K8sClient(server::String, sslconfig::MbedTLS.SSLConfig; headers::Dict{String, String}=Dict{String, String}())
+        new(server, sslconfig, headers)
+    end
+end
+
+function request(client::K8sClient, method::String, path::String)
+    @show client
+    uri = HTTP.URI(client.server)
+    uri = merge(uri; path=path)
+    @show uri
+    println("uri: ", string(uri))
+    return HTTP.request(method, string(uri), headers=client.headers, sslconfig=client.sslconfig)
+end
+
+"""
+    client()
+
+Creates a K8sClient based on whether it detects running in a pod or locally.
+"""
+function client()::K8sClient
+    envs = Base.EnvDict()
     host = get(envs, "KUBERNETES_SERVICE_HOST", "")
     if host == ""
         println("detected running locally, attempting kubeconfig connection")
-        return kubeconfig_client("")
+        return client("")
     end
 
     println("detected running in pod, attempting in-cluster connection")
@@ -17,18 +41,19 @@ function discover_client()::Kuber.KuberContext
 end
 
 """
-    kubeconfig_client(kubeconfigpath::string)
+    client(kubeconfigpath::string)
 
-Creates a kubercontext configured from a kubeconfig file. If kubeconfig path is
+Creates a K8sClient configured from a kubeconfig file. If kubeconfig path is
 an empty string it will look for the KUBCONFIG envvar or default to ~/.kube/config
 """
-function kubeconfig_client(kubeconfigpath::String)::Kuber.KuberContext
+function client(kubeconfigpath::String)::K8sClient
     envs = Base.EnvDict()
 
     if kubeconfigpath == ""
         default = Base.Filesystem.joinpath(Base.Filesystem.homedir(), ".kube/config")
         kubeconfigpath = get(envs, "KUBECONFIG", default)
     end
+    println("kubeconfig filepath: ", kubeconfigpath)
     kubecfg = YAML.load(open(kubeconfigpath))
 
     currentcontext = get(kubecfg, "current-context", "")
@@ -41,7 +66,6 @@ function kubeconfig_client(kubeconfigpath::String)::Kuber.KuberContext
     clustername = ""
     username = ""
     for context in kubecfg["contexts"]
-        println(context)
         if context["name"] == currentcontext
             clustername = context["context"]["cluster"]
             username = context["context"]["user"]
@@ -52,6 +76,7 @@ function kubeconfig_client(kubeconfigpath::String)::Kuber.KuberContext
         error(string("could not find user or cluster for current context: ", currentcontext))
     end
 
+    # TODO: handle other auth scenarios
     cadata = ""
     server = ""
     for cluster in kubecfg["clusters"]
@@ -86,29 +111,34 @@ function kubeconfig_client(kubeconfigpath::String)::Kuber.KuberContext
     capath, io = Base.Filesystem.mktemp()
     write(io, Base64.base64decode(cadata))
     close(io)
+    println("capath: ", capath)
 
     certpath, io = Base.Filesystem.mktemp()
     write(io, Base64.base64decode(clientcert))
     close(io)
+    println("certpath: ", certpath)
 
     keypath, io = Base.Filesystem.mktemp()
     write(io, Base64.base64decode(clientkey))
     close(io)
-    conf = MbedTLS.SSLConfig(certpath, keypath)
+    println("keypath: ", keypath)
 
-    MbedTLS.ca_chain!(conf, MbedTLS.crt_parse_file(capath))
-    kctx = Kuber.KuberContext()
-    println("server: ", server)
-    Kuber.set_server(kctx, server, tlsconfig=conf, require_ssl_verification=false)
-    return kctx
+    conf = MbedTLS.SSLConfig(certpath, keypath)
+    MbedTLS.config_defaults!(conf)
+
+    cacert = MbedTLS.crt_parse_file(capath)
+    println("capath: ", cacert)
+    MbedTLS.ca_chain!(conf, cacert)
+
+    return K8sClient(server, conf)
 end
 
 """
     incluster_client()
 
-Creates a kubercontext configured from a pods enviornment.
+Creates a K8sClient configured from a pods enviornment.
 """
-function incluster_client()::Kuber.KuberContext
+function incluster_client()::K8sClient
     tokenFile  = "/var/run/secrets/kubernetes.io/serviceaccount/token"
     rootCAFile = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 
@@ -132,7 +162,16 @@ function incluster_client()::Kuber.KuberContext
     # TODO: this needs fixed upstream to handle token refreshes
     headers = Dict("Authorization" => string("bearer ", token))
 
+    return K8sClient(uri, conf; headers=headers)
+end
+
+"""
+    kubercontext(client::K8sClient)::Kuber.KuberContext
+
+Creates a kubercontext from a client
+"""
+function kubercontext(client::K8sClient)::Kuber.KuberContext
     kctx = Kuber.KuberContext()
-    Kuber.set_server(kctx, uri=uri, headers=headers, tlsconfig=conf, require_ssl_verification=false)
+    Kuber.set_server(kctx, client.uri, true, headers=client.headers, sslconfig=client.sslconfig, require_ssl_verification=true)
     return kctx
 end

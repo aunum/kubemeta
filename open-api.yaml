@@ -1,0 +1,61 @@
+openapi: 3.0.0
+info: 
+  title: KubeMeta Skeleton
+  version: 1.0.0
+paths: 
+  /process:
+    post:
+      requestBody:
+        description: User defined input
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/input'
+      responses:
+        '200':
+          description: User defined output
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/output'
+  /train:
+    post:
+      requestBody:
+        description: Train the process
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/train'
+  /stats: 
+    get:
+      responses:
+        '200':
+          description: Controller defined stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/stats'
+components:
+  schemas:
+    input:
+      type: object
+      additionalProperties: {}
+    output:
+      type: object
+      additionalProperties: {}
+    train:
+      type: array
+      items:
+        type: object
+        properties:
+          input:
+            schema:
+              $ref: '#/components/schemas/input'
+          output:
+            schema:
+              $ref: '#/components/schemas/output'      
+    stats:
+      type: object
+      additionalProperties: {}

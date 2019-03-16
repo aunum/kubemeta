@@ -1,0 +1,1 @@
+* provide cli that can generate sdks from the spec

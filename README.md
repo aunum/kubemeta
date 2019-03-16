@@ -3,6 +3,7 @@ A meta-learning platform for Kubernetes
 
 *"life is a complex nesting of organization at different levels and scales"*
 ## Overview
+*NOTE: This project is pre-alpha and not in a working state yet*
 Kubemeta aims to be a compositional way of creating [meta-learning](https://arxiv.org/abs/1810.03548) environments on Kubernetes that foster [AutoML](https://github.com/hibayesian/awesome-automl-papers).
 
 ### Tasks

@@ -1,0 +1,29 @@
+apiVersion: kubemeta.ai/v1alpha1
+kind: Task
+metadata:
+  name: task1
+spec:
+  input:
+    feature1:
+      type: string
+    feature2:
+      type: string
+  output:
+    value:
+      type: int
+---
+apiVersion: kubemeta.ai/v1alpha1
+kind: Task
+metadata:
+  name: task2
+spec:
+  input:
+    feature1:
+      type: string
+    feature2:
+      type: string
+    feature3:
+      type: string
+  output:
+    value:
+      type: int

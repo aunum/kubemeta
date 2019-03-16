@@ -1,8 +1,9 @@
 module KubeMeta
 
 include("client.jl")
+include("informer.jl")
 include("controller.jl")
 
-export discover_client, kubeconfig_client, incluster_client
+export TaskController, run, K8sClient, request
 
 end # module

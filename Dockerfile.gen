@@ -1,0 +1,6 @@
+FROM maven:3.6-slim
+RUN apt-get update && apt-get install -y git
+WORKDIR /
+RUN apt-get install -y wget && wget https://julialang-s3.julialang.org/bin/linux/x64/1.1/julia-1.1.0-linux-x86_64.tar.gz && tar xvzf julia-1.1.0-linux-x86_64.tar.gz
+RUN ln -s /julia-1.1.0/bin/julia /usr/local/bin/julia
+RUN git clone https://github.com/JuliaComputing/Swagger.jl.git
