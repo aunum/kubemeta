@@ -14,13 +14,13 @@ mutable struct K8sClient
     end
 end
 
-function request(client::K8sClient, method::String, path::String)
+function request(client::K8sClient, method::String, path::String)::HTTP.Messages.Response
     @show client
     uri = HTTP.URI(client.server)
     uri = merge(uri; path=path)
     @show uri
     println("uri: ", string(uri))
-    return HTTP.request(method, string(uri), headers=client.headers, sslconfig=client.sslconfig)
+    return HTTP.request(method, string(uri), headers=client.headers, sslconfig=client.sslconfig, status_exception=false)
 end
 
 """

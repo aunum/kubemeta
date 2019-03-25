@@ -2,7 +2,7 @@
 
 cluster-up:
 	kind create cluster --config kind-config.yaml
-	kubectl apply -f crd.yaml
+	KUBECONFIG="$(kind get kubeconfig-path --name="kind")" kubectl apply -f crd.yaml
 
 cluster-down:
 	kind delete cluster
