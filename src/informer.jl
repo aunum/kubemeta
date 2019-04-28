@@ -1,11 +1,12 @@
 import Kuber, HTTP, DataStructures, JSON, Dates
 
 include("client.jl")
+# include("controllers/Controllers.jl")
 
 """
     TaskListWatcher(client::K8sClient)
 
-A TaskListWatcher will keep a cache of the current state of the Task CRDs in the cluster by watching 
+A TaskListWatcher will keep a cache of the current state of the Task CRDs in the cluster by watching
 the resource and periodically listing it.
 """
 mutable struct TaskListWatcher
@@ -18,16 +19,16 @@ mutable struct TaskListWatcher
 end
 
 function listwatch(listwatcher::TaskListWatcher)
-    println("getting tasks")
+    @info "getting tasks"
     tasks = list_tasks(listwatcher)
     # @show tasks
-    
+
     # check if task in in current cache otherwise send to chan
     for taskid in keys(tasks)
         task = tasks[taskid]
         existing = get(listwatcher.tasks, task["metadata"]["uid"], Dict{String, Any}())
         if length(existing) == 0
-            println("sending to queue!")
+            @info "sending add/update to queue!"
             put!(listwatcher.chan, task)
             listwatcher.tasks[taskid] = task
         end
@@ -37,7 +38,7 @@ function listwatch(listwatcher::TaskListWatcher)
         task = listwatcher.tasks[taskid]
         existing = get(tasks, task["metadata"]["uid"], Dict{String, Any}())
         if length(existing) == 0
-            println("sending to queue!!")
+            @info "sending deletion to queue!!"
             put!(listwatcher.chan, task)
             delete!(listwatcher.tasks, taskid)
         end
@@ -45,7 +46,7 @@ function listwatch(listwatcher::TaskListWatcher)
 end
 
 function loop(listwatcher::TaskListWatcher, interval::Dates.Second)
-    println("starting loop...")
+    @info "starting loop..."
     while true
         listwatch(listwatcher)
         sleep(Dates.value(interval))
@@ -68,7 +69,7 @@ function get_task(listwatcher::TaskListWatcher, name::String, namespace::String)
     uri = string("/apis/kubemeta.ai/v1alpha1/namespaces/", namespace, "/tasks/", name)
     resp = HTTP.Messages.Response()
     resp = request(listwatcher.client, "GET", uri)
-    @show resp
+    # @show resp
     if resp.status >= 300
         return Dict{String, Any}()
     end
@@ -81,71 +82,49 @@ function watch_task(listwatcher::TaskListWatcher)
     # TODO
 end
 
-"""
-    EventHandler(add::Function(Dict{String, Any}), 
-            update::Function(Dict{String, Any}), 
-            delete::Function(Dict{String, Any})
-            )
-
-An EventHandler can be registered with the informer to handle event actions.
-"""
-struct EventHandler
-    add::Function(Dict{String, Any})
-    update::Function(Dict{String, Any})
-    delete::Function(Dict{String, Any})
-    function EventHandler(add::Function(Dict{String, Any}), 
-            update::Function(Dict{String, Any}), 
-            delete::Function(Dict{String, Any})
-            )
-        new(add, update, delete)
-    end
-end
-
 # TODO: make this a more generic crd informer
 """
     TaskInformer(listwatcher::TaskListWatcher)
 
-A TaskInformer will inform on what changes have occurred with the Task CRDs, and apply the appropriate 
+A TaskInformer will inform on what changes have occurred with the Task CRDs, and apply the appropriate
 handler functions.
 """
 mutable struct TaskInformer
     listwatcher::TaskListWatcher
     chan::Channel
-    eventhandler::EventHandler
-    function TaskInformer(listwatcher::TaskListWatcher, chan::Channel)
-        new(listwatcher, chan)
+    controller
+    function TaskInformer(listwatcher::TaskListWatcher, chan::Channel, controller)
+        new(listwatcher, chan, controller)
     end
 end
 
-function run(taskInformer::TaskInformer)
-    println("running async")
-    @async loop(taskInformer.listwatcher, Dates.Second(2))
+function run(taskinformer::TaskInformer)
+    @info "running async"
+    @async loop(taskinformer.listwatcher, Dates.Second(2))
     while true
-        println("taking from chan")
-        data = take!(taskInformer.chan)
-        @show data
-        dispatch(taskInformer.listwatcher, data)
+        @info "taking from chan"
+        data = take!(taskinformer.chan)
+        @debug "received data: " data
+        dispatch(taskinformer.listwatcher, taskinformer.controller, data)
     end
 end
 
-function dispatch(listwatcher::TaskListWatcher, task::Dict{String, Any})
+function dispatch(listwatcher::TaskListWatcher, controller, task::Dict{String, Any})
     found = get_task(listwatcher, task["metadata"]["name"], task["metadata"]["namespace"])
     # task is missing
     if length(found) == 0
-        println("deleting task: ", task)
-        # should somehow use multiple dispatch here
-        listwatcher.eventhandler.delete(task)
+        @info "deleting task: " task
+        delete_task(controller, task)
         return
     end
     # task is present, check if ids match
-    if task["metadata"]["uid"] != found["metadata"]["uid"]
-        println("updating task: ", task)
-        listwatcher.eventhandler.update(task)
+    if task["metadata"]["resourceVersion"] != found["metadata"]["resourceVersion"]
+        @info "updating task: " task
+        update_task(controller, task)
         return
     end
-    # uids and names match, its an add
-    println("adding task: ", task)
-    listwatcher.eventhandler.add(task)
+    # resource versions and names match, its an add
+    @info "adding task: " task
+    add_task(controller, task)
     return
 end
-

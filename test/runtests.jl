@@ -1,6 +1,10 @@
 using KubeMeta, Test
 
 @testset "kubeconfig connect" begin
-    c = TaskController("")
-    KubeMeta.run(c)
+    chan = Channel(32)
+    cli = client()
+    lw = TaskListWatcher(cli, chan)
+    controller = DifferentiableController()
+    informer = TaskInformer(lw, chan, controller)
+    KubeMeta.run(informer)
 end

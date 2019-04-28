@@ -15,11 +15,10 @@ mutable struct K8sClient
 end
 
 function request(client::K8sClient, method::String, path::String)::HTTP.Messages.Response
-    @show client
+    @debug client
     uri = HTTP.URI(client.server)
     uri = merge(uri; path=path)
-    @show uri
-    println("uri: ", string(uri))
+    @debug uri
     return HTTP.request(method, string(uri), headers=client.headers, sslconfig=client.sslconfig, status_exception=false)
 end
 
@@ -32,11 +31,11 @@ function client()::K8sClient
     envs = Base.EnvDict()
     host = get(envs, "KUBERNETES_SERVICE_HOST", "")
     if host == ""
-        println("detected running locally, attempting kubeconfig connection")
+        @info "detected running locally, attempting kubeconfig connection"
         return client("")
     end
 
-    println("detected running in pod, attempting in-cluster connection")
+    @info "detected running in pod, attempting in-cluster connection"
     return incluster_client()
 end
 
@@ -53,7 +52,7 @@ function client(kubeconfigpath::String)::K8sClient
         default = Base.Filesystem.joinpath(Base.Filesystem.homedir(), ".kube/config")
         kubeconfigpath = get(envs, "KUBECONFIG", default)
     end
-    println("kubeconfig filepath: ", kubeconfigpath)
+    @info "kubeconfig filepath: " kubeconfigpath
     kubecfg = YAML.load(open(kubeconfigpath))
 
     currentcontext = get(kubecfg, "current-context", "")
@@ -61,7 +60,7 @@ function client(kubeconfigpath::String)::K8sClient
         error("current kubeconfig context is empty")
     end
 
-    println("using current context: ", currentcontext)
+    @info "using current context: " currentcontext
 
     clustername = ""
     username = ""
@@ -90,7 +89,7 @@ function client(kubeconfigpath::String)::K8sClient
         error(string("could not find cluster for current context: ", currentcontext))
     end
 
-    println("using server: ", server)
+    @info "using server: " server
 
     clientcert = ""
     clientkey = ""
@@ -104,30 +103,30 @@ function client(kubeconfigpath::String)::K8sClient
         error("could not find client cert or key from current context: ", currentcontext)
     end
 
-    println("using user: ", username)
+    @info "using user: " username
 
     # save ssl info as temp files
     # TODO: would prefer to find a way of doing this without temp files
     capath, io = Base.Filesystem.mktemp()
     write(io, Base64.base64decode(cadata))
     close(io)
-    println("capath: ", capath)
+    @debug "capath: " capath
 
     certpath, io = Base.Filesystem.mktemp()
     write(io, Base64.base64decode(clientcert))
     close(io)
-    println("certpath: ", certpath)
+    @debug "certpath: " certpath
 
     keypath, io = Base.Filesystem.mktemp()
     write(io, Base64.base64decode(clientkey))
     close(io)
-    println("keypath: ", keypath)
+    @debug "keypath: " keypath
 
     conf = MbedTLS.SSLConfig(certpath, keypath)
     MbedTLS.config_defaults!(conf)
 
     cacert = MbedTLS.crt_parse_file(capath)
-    println("capath: ", cacert)
+    @debug "capath: " cacert
     MbedTLS.ca_chain!(conf, cacert)
 
     return K8sClient(server, conf)
@@ -157,7 +156,7 @@ function incluster_client()::K8sClient
     MbedTLS.ca_chain!(conf, MbedTLS.crt_parse_file(rootCAFile))
 
     uri = string("https://", host, ":", port)
-    println("using server: ", uri)
+    @info "using server: " uri
 
     # TODO: this needs fixed upstream to handle token refreshes
     headers = Dict("Authorization" => string("bearer ", token))
