@@ -1,6 +1,6 @@
 using KubeMeta, Test
 
-@testset "kubeconfig connect" begin
+@testset "differentiable controller" begin
     chan = Channel(32)
     cli = client()
     lw = TaskListWatcher(cli, chan)

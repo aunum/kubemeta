@@ -2,7 +2,6 @@ module KubeMeta
 
 include("client.jl")
 include("informer.jl")
-include("controller.jl")
 
 export TaskListWatcher, TaskInformer, run, K8sClient, request, client
 

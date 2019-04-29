@@ -1,4 +1,4 @@
-import Kuber, MbedTLS, Base, Swagger, YAML, Base64
+import Kuber, MbedTLS, Base, Swagger, YAML, Base64, HTTP
 
 """
     K8sClient(uri::String, sslconfig::MbedTLS.SSLConfig, headers::Dict{String, String})
@@ -14,12 +14,21 @@ mutable struct K8sClient
     end
 end
 
+"""
+    request(client::K8sClient, method::String, path::String)::HTTP.Messages.Response
+
+Makes a request to the Kubernetes server using the given client on the method and path.
+"""
 function request(client::K8sClient, method::String, path::String)::HTTP.Messages.Response
-    @debug client
     uri = HTTP.URI(client.server)
     uri = merge(uri; path=path)
-    @debug uri
     return HTTP.request(method, string(uri), headers=client.headers, sslconfig=client.sslconfig, status_exception=false)
+end
+
+function request(client::K8sClient, method::String, path::String, body::String)::HTTP.Messages.Response
+    uri = HTTP.URI(client.server)
+    uri = merge(uri; path=path)
+    return HTTP.request(method, string(uri), client.headers, body, sslconfig=client.sslconfig, status_exception=false)
 end
 
 """
